@@ -1,55 +1,36 @@
-    const express = require("express");
-    const { Server } = require("socket.io");
-    const app = express();
-    const helmet = require("helmet");
-    const cors = require("cors");
-    const authRouter = require("./routers/authRouter");
-    const session = require("express-session");
-    const server = require("http").createServer(app);
-    const redisClient = require('./redis')
+const express = require("express");
+const { Server } = require("socket.io");
+const app = express();
+const helmet = require("helmet");
+const cors = require("cors");
+const authRouter = require("./routers/authRouter");
+const { sessionMiddleware, wrap, corsConfig } = require("./controllers/serverController");
+const server = require("http").createServer(app);
 
-    const RedisStore = require("connect-redis").default;
-    require('dotenv').config()
+require('dotenv').config()
 
-    const io = new Server(server, {
-        cors: {
-            origin: "http://localhost:3000",
-            credentials: "true",
-        },
-    });
+const io = new Server(server, {
+    cors: corsConfig,
+});
 
-    const sessionSecret = process.env.COOKIE_SECRET;
+const sessionSecret = process.env.COOKIE_SECRET;
 
-    if (!sessionSecret) {
-        throw new Error("COOKIE_SECRET is not defined in environment variables");
-    }
+if (!sessionSecret) {
+    throw new Error("COOKIE_SECRET is not defined in environment variables");
+}
 
-    app.use(helmet());
-    app.use(cors({
-        origin: "http://localhost:3000",
-        credentials: true
-    })
-    );
+app.use(helmet());
+app.use(cors(corsConfig));
+app.use(express.json())
+app.use(sessionMiddleware)
+app.use("/auth", authRouter);
 
-    app.use(express.json())
-    app.use(session({
-        secret: process.env.COOKIE_SECRET,
-        credentials: true,
-        name: "sid",
-        store: new RedisStore({ client: redisClient }),
-        resave: false,
-        saveUninitialized: false,
-        cookie:{
-            secure: process.env.ENVIRONMENT === "production"? "true" : "auto",
-            httpOnly: true,
-            expires: 1000 * 60 * 60 * 24 * 7,
-            sameSite: process.env.ENVIRONMENT === "production" ? "none" : "lax",
-        } 
-    }))
-    app.use("/auth", authRouter);
+io.use(wrap(sessionMiddleware))
+io.on("connect", socket => {
+    console.log(socket.id);
+    console.log(socket.request.session.user.username)
+})
 
-    io.on("connect", socket => {})
-
-    server.listen(4000, () => {
-        console.log("server listening on port 4000")
-    })
+server.listen(4000, () => {
+    console.log("server listening on port 4000")
+})
