@@ -2,15 +2,14 @@ import { Grid, GridItem, Tabs, TabPanels, TabPanel, TabList, Tab } from "@chakra
 import Sidebar from "./Sidebar";
 import Chat from "./Chat";
 import { createContext, useState } from "react";
+import useSocketSetup from "./useSocketSetup";
 
 export const FriendContext = createContext();
 
 const Home = () => {
-    const [friendList, setFriendList] = useState([
-        { username: "FIlipe", connected: true },
-        { username: "John Doe", connected: false },
-        { username: "Stevend", connected: true },
-    ]);
+    const [friendList, setFriendList] = useState([]);
+    useSocketSetup();
+    console.log("useSocketSetup >>>>")
 
     return (
         <FriendContext.Provider value={{ friendList, setFriendList }}>

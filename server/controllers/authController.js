@@ -11,8 +11,6 @@ module.exports.handleLogin = (req, res) => {
 }
 
 module.exports.attemptLogin = async (req, res) => {
-    console.log("ran heavy task>>>>>>>>>>>>>>>")
-    console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     const potentialLogin = await pool.query("SELECT id, username, passhash FROM users u WHERE u.username=$1",
         [req.body.username]
     )   

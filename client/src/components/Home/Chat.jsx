@@ -1,4 +1,4 @@
-import { Text, TabPanel, VStack } from '@chakra-ui/react'
+import { Text, TabPanel, VStack, TabPanels } from '@chakra-ui/react'
 import React, { useContext } from 'react'
 import { FriendContext } from './Home'
 
@@ -16,7 +16,11 @@ const Chat = () => {
         textAlign="center"
         fontSize="lg"
     >
-        <Text>No Friends :( Click add friend to start chatting</Text>
+      <TabPanels>
+        <TabPanel>
+          <Text>No Friends :( Click add friend to start chatting</Text>
+        </TabPanel>
+      </TabPanels>
     </VStack>
     );
 }
