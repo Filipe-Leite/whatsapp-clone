@@ -5,6 +5,7 @@ const helmet = require("helmet");
 const cors = require("cors");
 const authRouter = require("./routers/authRouter");
 const { sessionMiddleware, wrap, corsConfig } = require("./controllers/serverController");
+const { authorizeUser } = require("./controllers/socketController");
 const server = require("http").createServer(app);
 
 require('dotenv').config()
@@ -26,7 +27,9 @@ app.use(sessionMiddleware)
 app.use("/auth", authRouter);
 
 io.use(wrap(sessionMiddleware))
+io.use(authorizeUser);
 io.on("connect", socket => {
+    console.log("USERID: ", socket.user.userid);
     console.log(socket.id);
     console.log(socket.request.session.user.username)
 })
