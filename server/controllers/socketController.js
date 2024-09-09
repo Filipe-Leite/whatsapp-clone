@@ -11,10 +11,13 @@ module.exports.authorizeUser = (socket, next) => {
 
 module.exports.initializeUser = async socket => {
     socket.user = { ...socket.request.session.user }
+    socket.join(socket.user.userid);
     await redisClient.hset(
         `userid:${socket.user.username}`, 
         "userid", 
-        socket.user.userid
+        socket.user.userid,
+        "connected",
+        true
     );
 
     const friendList = await redisClient.lrange(
@@ -39,9 +42,8 @@ module.exports.addFriend = async ( socket, friendName, cb ) => {
         return;
     }
     
-    const friendUserID = await redisClient.hget(
-        `userid:${friendName}`,
-        "userid"    
+    const friend = await redisClient.hgetall(
+        `userid:${friendName}`
     );
 
     const currentFriendList = await redisClient.lrange(
@@ -50,7 +52,7 @@ module.exports.addFriend = async ( socket, friendName, cb ) => {
         -1    
     );
 
-    if (!friendUserID)  {
+    if (!friend)  {
         cb({ done: false, errorMsg: "User doesn't exist!" });
         return;
     }
@@ -60,7 +62,14 @@ module.exports.addFriend = async ( socket, friendName, cb ) => {
         return;
     }
 
-    await redisClient.lpush(`friends:${socket.user.username}`, friendName)
+    await redisClient.lpush(`friends:${socket.user.username}`, [
+        friendName, 
+        friend.userid
+    ].join("."));
 
     cb({ done: true })
+}
+
+module.exports.onDisconnect = async (socket) => {
+    await redisClient.hset(`userid:${socket.user.username}`, "connected", false)
 }
