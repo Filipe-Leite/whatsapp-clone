@@ -26,11 +26,16 @@ module.exports.initializeUser = async socket => {
         -1
     );
 
-    console.log(friendList)
-    socket.emit("friends", friendList)
-    console.log("user id: ", socket.user.userid,
-        "/ username: ", socket.user.username
-    );
+    const parsedFriendList = await parseFriendList(friendList)
+    const friendRooms = await parsedFriendList.map(friend => friend.userid);
+
+    if (friendRooms.length > 0){
+
+        socket.to(friendRooms).emit("connected", true, socket.user.username)
+    }
+    
+    console.log(`${socket.user.username} friends:${parsedFriendList}`);
+    socket.emit("friends", parsedFriendList)
 };
 
 module.exports.addFriend = async ( socket, friendName, cb ) => {
@@ -62,14 +67,52 @@ module.exports.addFriend = async ( socket, friendName, cb ) => {
         return;
     }
 
-    await redisClient.lpush(`friends:${socket.user.username}`, [
-        friendName, 
-        friend.userid
-    ].join("."));
+    await redisClient.lpush(
+        `friends:${socket.user.username}`,
+        [friendName, friend.userid].join("."));
 
-    cb({ done: true })
+    const newFriend = {
+        username: friendName,
+        userid: friend.userid,
+        connected: friend.connected,
+    }
+    cb({ done: true, newFriend })
 }
 
 module.exports.onDisconnect = async (socket) => {
-    await redisClient.hset(`userid:${socket.user.username}`, "connected", false)
+    await redisClient.hset(
+        `userid:${socket.user.username}`,
+        "connected", 
+        false
+    );
+
+    const friendList = await redisClient.lrange(
+        `friends:${socket.user.username}`,
+        0,
+        -1
+    );
+
+    const friendRooms = await parseFriendList(friendList).then(friends => 
+        friends.map(friend => friend.userid)
+    );
+
+    socket.to(friendRooms).emit("connected", false, socket.user.username)
+};
+
+    const parseFriendList = async (friendList) => {
+        const newFriendList = [];
+        for (let friend of friendList) {
+            const parseFriend = friend.split(".");
+            const friendConnected = await redisClient.hget(
+                `userid:${parseFriend[0]}`,
+                "connected"
+            );
+            newFriendList.push({
+                username: parseFriend[0],
+                userid: parseFriend[1],
+                connected: friendConnected,
+            })
+        }
+
+    return newFriendList;
 }
