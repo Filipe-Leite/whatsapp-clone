@@ -26,28 +26,30 @@ module.exports.initializeUser = async socket => {
         -1
     );
 
-    console.log(friendList)
-    socket.emit("friends", friendList)
+    const parsedFriendList = await parseFriendList(friendList);
+    const friendRooms = parsedFriendList.map(friend => friend.userid);
+
+    if (parseFriendList.length > 0){
+        socket.to(friendRooms).emit("connected", true, socket.user.username); 
+    }
+
+    console.log(`${socket.user.username} friends:`,parsedFriendList)
+    socket.emit("friends", parsedFriendList);
     console.log("user id: ", socket.user.userid,
         "/ username: ", socket.user.username
     );
 };
 
 module.exports.addFriend = async ( socket, friendName, cb ) => {
-    
     if (friendName === socket.user.username) {
-        console.log("cannot add self")
-        console.log(friendUserID)
         cb({ done: false, errorMsg: "Cannot add self!" });
         return;
     }
-    
-    const friend = await redisClient.hgetall(
-        `userid:${friendName}`
-    );
+
+    const friend = await redisClient.hgetall(`userid:${friendName}`);
 
     const currentFriendList = await redisClient.lrange(
-        `friends:${friendName}`,
+        `friends:${socket.user.username}`,
         0,
         -1    
     );
@@ -57,19 +59,58 @@ module.exports.addFriend = async ( socket, friendName, cb ) => {
         return;
     }
 
-    if (currentFriendList && currentFriendList.indexOf(friendName) !== -1)  {
+    console.log("currentFriendList >>> ", currentFriendList)
+
+    if (currentFriendList && currentFriendList.indexOf([friendName,friend.userid].join(".")) !== -1)  {
         cb({ done: false, errorMsg: "Friend already added!" });
         return;
     }
 
     await redisClient.lpush(`friends:${socket.user.username}`, [
-        friendName, 
+        friendName,
         friend.userid
     ].join("."));
 
-    cb({ done: true })
+    const newFriend = {
+        username: friendName,
+        userid: friend.userid,
+        connected: friend.connected
+    }
+
+    cb({ done: true, newFriend })
 }
 
 module.exports.onDisconnect = async (socket) => {
-    await redisClient.hset(`userid:${socket.user.username}`, "connected", false)
+    await redisClient.hset(
+        `userid:${socket.user.username}`, 
+        "connected", 
+        false
+    );
+
+    const friendList =  await redisClient.lrange(`friends:${socket.user.username}`,
+        0, -1)
+    const friendRooms = parseFriendList(friendList).then(friends => 
+        friends.map(friend => friend.userid)
+    );
+
+    socket.to(friendRooms).emit("connected", false, socket.user.username);  
+}
+
+const parseFriendList = async (friendList) => {
+    const newFriendList = [];
+    for (let friend of friendList) {
+        const parsedFriend = friend.split(".");
+        const friendConnected = await redisClient.hget(
+            `userid:${parsedFriend[0]}`,
+            "connected"
+        );
+
+        newFriendList.push({
+            username: parsedFriend[0],
+            userid: parsedFriend[1],
+            connected: friendConnected
+        });
+    }
+
+    return newFriendList
 }
